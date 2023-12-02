@@ -1,0 +1,13 @@
+# Ignore build output
+/app.js
+
+# Ignore node_modules except for the top-level ones
+/node_modules
+
+
+# Ignore local npm package directories
+*.npm/
+
+
+# Ignore TypeScript configuration file
+tsconfig.json
