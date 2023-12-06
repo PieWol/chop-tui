@@ -1,71 +1,91 @@
-import { ApiPromise, WsProvider } from '@polkadot/api';
-import * as readlineSync from 'readline-sync';
+import { ApiPromise, WsProvider } from "@polkadot/api"
+import { AnyJson } from "@polkadot/types-codec/types"
+import * as readlineSync from "readline-sync"
+import * as fs from 'fs';
+import * as path from 'path';
+
+const networkWsUrls: Record<string, string | undefined> = {
+  polkadot: "wss://rpc.polkadot.io",
+  kusama: "wss://kusama-rpc.polkadot.io",
+}
+
+async function main() {
+  const networkOptions = Object.keys(networkWsUrls)
+
+  // Prompt the user for the network selection
+  const selectedIndex = readlineSync.keyInSelect(networkOptions, "Select a network:")
+  if (selectedIndex === -1) {
+    console.log("Cancelled. Exiting...")
+    process.exitCode = 1
+    return
+  }
+
+  const selectedNetwork = networkOptions[selectedIndex]
+  await getRuntimeUpgradeByProposalHash(selectedNetwork)
+}
 
 async function getRuntimeUpgradeByProposalHash(network: string) {
-  let wsUrl: string;
-
-  if (network === 'polkadot') {
-    wsUrl = 'wss://rpc.polkadot.io';
-  } else if (network === 'kusama') {
-    wsUrl = 'wss://kusama-rpc.polkadot.io';
-  } else {
-    throw new Error('Invalid network selection');
-  }
-
-  const wsProvider = new WsProvider(wsUrl);
-  const api = await ApiPromise.create({ provider: wsProvider });
+  const wsUrl = networkWsUrls[network]
+  if (typeof wsUrl !== "string") throw new Error("Invalid network selection")
 
   // Ask the user for a proposal hash
-  const proposalHash = readlineSync.question('Enter the proposal hash: ');
+  const proposalHash = readlineSync.question("Enter the proposal hash: ", {
+    limit: (input) => input.length > 0,
+    limitMessage: "Input a valid proposal hash, please.",
+  })
   // Ask the user for the len
-  const proposalLen = readlineSync.question('Enter the len: ');
+  const proposalLen = readlineSync.questionInt("Enter the len: ").toString()
+
+  const api = await ApiPromise.create({ provider: new WsProvider(wsUrl) })
 
   try {
-    const preimage = await api.query.preimage.preimageFor([proposalHash, proposalLen]);
-    const encodedCall = preimage.toHuman();
+    const preimage = await api.query.preimage.preimageFor([proposalHash, proposalLen])
+    const encodedCall = preimage.toHuman()
+
+    // Check for null fetch
+    if (encodedCall == null) {
+        console.log('Could not fetch preimage. Data has been cleared or inputs were wrong.')
+        return
+      }
 
     // Display the results
-    const metadata = await api.rpc.state.getMetadata();
-    console.log('Metadata Version:', metadata.version.toString());
+    const metadata = await api.rpc.state.getMetadata()
+    console.log("Metadata Version:", metadata.version.toString())
 
     // Decode the extrinsic using the extrinsic type
-    const decodedExtr = api.createType("Call", encodedCall).toHuman();
-    console.log('Decoded Extrinsic:', formatCall(decodedExtr));
+    const decodedExtr = api.createType("Call", encodedCall).toHuman()
+    console.log("Decoded Extrinsic:", formatCall(decodedExtr))
   } catch (error) {
-    console.error(`Error fetching data for proposal hash ${proposalHash}:`, error);
+    throw new Error(`Error fetching data for proposal hash ${proposalHash}: ${String(error)}`)
+  } finally {
+    await api.disconnect()
   }
 }
 
-function formatCall(call: any, depth = 0): string {
-  let result = '';
+function formatCall(call: Record<string, AnyJson> | AnyJson | null, depth = 0): string {
+  if (call === null || call === undefined) return ""
 
-  for (const key in call) {
-    if (call.hasOwnProperty(key)) {
-      const value = call[key];
+  return Object.entries(call)
+    .map(([key, value]) => {
+      // Handle arrays (e.g., nested calls)
+      if (Array.isArray(value))
+        return value
+          .map((item) => `${" ".repeat(depth * 2)}${key}:\n${formatCall(item, depth + 1)}`)
+          .join("")
 
-      if (Array.isArray(value)) {
-        // Handle arrays (e.g., nested calls)
-        value.forEach((item: any) => {
-          result += `${' '.repeat(depth * 2)}${key}:\n${formatCall(item, depth + 1)}`;
-        });
-      } else if (typeof value === 'object') {
-        // Handle nested objects
-        result += `${' '.repeat(depth * 2)}${key}:\n${formatCall(value, depth + 1)}`;
-      } else {
-        // Display key-value pair
-        result += `${' '.repeat(depth * 2)}${key}: ${value}\n`;
-      }
-    }
-  }
+      // Handle nested objects
+      if (typeof value === "object")
+        return `${" ".repeat(depth * 2)}${key}:\n${formatCall(value, depth + 1)}`
 
-  return result;
+      // Display key-value pair
+      return `${" ".repeat(depth * 2)}${key}: ${value}\n`
+    })
+    .join("")
 }
 
-// Prompt the user for the network selection
-const selectedNetwork = readlineSync.keyInSelect(['polkadot', 'kusama'], 'Select a network:');
-if (selectedNetwork === -1) {
-  console.log('Canceled. Exiting...');
-} else {
-  const network = ['polkadot', 'kusama'][selectedNetwork];
-  getRuntimeUpgradeByProposalHash(network).catch((error) => console.error(error));
-}
+main()
+  .then(() => process.exit(0))
+  .catch((error) => {
+    console.error(error)
+    process.exit(1)
+  })
