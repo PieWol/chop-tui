@@ -1,13 +1,18 @@
 import { ApiPromise, WsProvider } from "@polkadot/api"
 import { AnyJson } from "@polkadot/types-codec/types"
+import { exec } from 'child_process';
 import * as readlineSync from "readline-sync"
 import * as fs from 'fs';
 import * as path from 'path';
+import { parachains } from "@polkadot/types/interfaces/definitions";
 
 const networkWsUrls: Record<string, string | undefined> = {
   polkadot: "wss://rpc.polkadot.io",
   kusama: "wss://kusama-rpc.polkadot.io",
 }
+
+// Declare parachainValues at the top-level scope
+const parachainValues: any[] = [];
 
 async function main() {
   const networkOptions = Object.keys(networkWsUrls)
@@ -21,6 +26,8 @@ async function main() {
   }
 
   const selectedNetwork = networkOptions[selectedIndex]
+  
+
   await getRuntimeUpgradeByProposalHash(selectedNetwork)
 }
 
@@ -54,7 +61,11 @@ async function getRuntimeUpgradeByProposalHash(network: string) {
 
     // Decode the extrinsic using the extrinsic type
     const decodedExtr = api.createType("Call", encodedCall).toHuman()
+    // Add a variable to store parachain values
+    const parachainValues: any[] = [];
     console.log("Decoded Extrinsic:", formatCall(decodedExtr))
+
+    startChopsticks(parachainValues)
   } catch (error) {
     throw new Error(`Error fetching data for proposal hash ${proposalHash}: ${String(error)}`)
   } finally {
@@ -89,3 +100,35 @@ main()
     console.error(error)
     process.exit(1)
   })
+
+// Modify startChopsticks to accept parachainValues as an argument
+function startChopsticks(parachainValues: any[]) {
+  // Construct the chopsticks command based on parachainValues
+  // launch the correct network for each parachainID. TODO:
+  parachainValues.forEach(({ network, encodedCall }) => {
+    const chopsticksCommand = `chopsticks --network ${network}  --encodedCall ${encodedCall}`;
+    
+    // Start chopsticks using child_process
+    const child = exec(chopsticksCommand);
+
+    // Handle child process events as needed
+    child.on('exit', (code, signal) => {
+      console.log(`chopsticks exited with code ${code} and signal ${signal}`);
+    });
+
+    
+    // Check if stdout exists before using it
+    if (child.stdout) {
+      child.stdout.on('data', (data) => {
+        console.log(`chopsticks stdout: ${data}`);
+      });
+    }
+
+    // Check if stderr exists before using it
+    if (child.stderr) {
+      child.stderr.on('data', (data) => {
+        console.error(`chopsticks stderr: ${data}`);
+      });
+    }
+  });
+}
