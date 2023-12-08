@@ -64,6 +64,8 @@ async function getRuntimeUpgradeByProposalHash(network: string) {
     // Add a variable to store parachain values
     const parachainValues: any[] = [];
     console.log("Decoded Extrinsic:", formatCall(decodedExtr))
+    // display involved parachains
+    console.log("ParachainIDs:", parachainValues.toString())
 
     startChopsticks(parachainValues)
   } catch (error) {
@@ -78,6 +80,12 @@ function formatCall(call: Record<string, AnyJson> | AnyJson | null, depth = 0): 
 
   return Object.entries(call)
     .map(([key, value]) => {
+      
+      // track all parachainIDs
+      if (key === "Parachain") {
+        parachainValues.push(value);
+      }
+      
       // Handle arrays (e.g., nested calls)
       if (Array.isArray(value))
         return value
