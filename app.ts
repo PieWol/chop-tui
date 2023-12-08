@@ -80,12 +80,13 @@ function formatCall(call: Record<string, AnyJson> | AnyJson | null, depth = 0): 
 
   return Object.entries(call)
     .map(([key, value]) => {
-      
       // track all parachainIDs
       if (key === "Parachain") {
         parachainValues.push(value);
       }
-      
+      console.log("current key:", key);
+      console.log("current value:", value);
+
       // Handle arrays (e.g., nested calls)
       if (Array.isArray(value))
         return value
