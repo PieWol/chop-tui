@@ -76,7 +76,7 @@ async function getRuntimeUpgradeByProposalHash(network: string) {
     // display involved parachains
     console.log("ParachainIDs:", parachainValues.toString())
 
-    startChopsticks(parachainValues)
+    startChopsticks(encodedCall)
   } catch (error) {
     throw new Error(`Error fetching data for proposal hash ${proposalHash}: ${String(error)}`)
   } finally {
@@ -85,6 +85,7 @@ async function getRuntimeUpgradeByProposalHash(network: string) {
 }
 
 // convert all paraID's to their name based on the relaychain decision.
+// even needed?
 function getParachainNames() {
   // Example usage
   const filePath = 'parachains.json';
@@ -134,11 +135,10 @@ main()
   })
 
 // Modify startChopsticks to accept parachainNames as an argument
-function startChopsticks(parachainNames: any[]) {
-  // Construct the chopsticks command based on parachainValues
-  // launch the correct network for each parachainID. TODO:
-  parachainValues.forEach(({ network, encodedCall }) => {
-    const chopsticksCommand = `chopsticks --network ${network}  --encodedCall ${encodedCall}`;
+// no idea how to properly restrict the type :/
+function startChopsticks(preimage: any) {
+  // Construct the chopsticks command to dry run
+    const chopsticksCommand = `npx @acala-network/chopsticks@latest dry-run --endpoint= ${networkWsUrls[relaychain]} --preimage= ${preimage} --open`;
     
     // Start chopsticks using child_process
     const child = exec(chopsticksCommand);
@@ -162,5 +162,4 @@ function startChopsticks(parachainNames: any[]) {
         console.error(`chopsticks stderr: ${data}`);
       });
     }
-  });
-}
+  }
