@@ -8,6 +8,11 @@
 # Ignore local npm package directories
 *.npm/
 
+# Ignore chopsticks artifacts
+db.sqlite
+db.sqlite-shm
+db.sqlite-wal
+
 
 # Ignore TypeScript configuration file
 tsconfig.json
