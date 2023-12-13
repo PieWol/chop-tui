@@ -1,0 +1,40 @@
+chop-tui % node app.js
+
+[1] polkadot
+[2] kusama
+[0] CANCEL
+
+Select a network [1, 2, 0]: 1
+Enter the proposal hash: 0x3e2c708625d90b20143760ff13d1f5bedd250e7482cb376f9a8d04a3eb73311f
+Enter the len: 165
+Unable to map [u8; 32] to a lookup index
+Metadata Version: 14
+Decoded Extrinsic: args:
+  dest:
+    V3:
+      parents: 0
+      interior:
+        X1:
+          Parachain: 1,000
+  message:
+    V3:
+      UnpaidExecution:
+        weightLimit: Unlimited
+        checkOrigin:
+    V3:
+      Transact:
+        originKind: Superuser
+        requireWeightAtMost:
+          refTime: 200,000,000
+          proofSize: 4,096
+        call:
+          encoded: 0x3215e51400636bf89804bbac561be9ce382a3fde401e3b217364e71d010516f8adcafbfbf6007cfeb645d5dc994a3ddff1d4118516b2ca36d165b99df15e81ac11de7664dece003725f662547df65c08722ac955b7f668b265f63ad5bc8ce4afb5d7eab938e85e0045fd34d372d89f1934e14f99fb3a7a977df9779763d265ce7a450af4d6df8a1582b92a000100
+method: send
+section: xcmPallet
+
+ParachainIDs: 1,000
+getting parachain names for : 1,000
+getting parachain names from : statemint
+starting chopsticks with command: npx @acala-network/chopsticks@latest --relaychain=polkadot --parachain=statemint
+
+chop-tui %
