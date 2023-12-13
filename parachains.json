@@ -1,12 +1,12 @@
 {
     "relaychain": {
       "polkadot": {
-        "1000": "statemint",
-        "1001": "collectives",
-        "1002": "bridge-hub"
+        "1,000": "statemint",
+        "1,001": "collectives",
+        "1,002": "bridge-hub"
       },
       "kusama": {
-        "1000": "statemine"
+        "1,000": "statemine"
 
       }
     }

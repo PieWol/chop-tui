@@ -1,6 +1,6 @@
 import { ApiPromise, WsProvider } from "@polkadot/api"
 import { AnyJson } from "@polkadot/types-codec/types"
-import { exec } from 'child_process';
+import { execSync} from 'child_process';
 import * as readlineSync from "readline-sync"
 import * as fs from 'fs';
 import * as path from 'path';
@@ -73,14 +73,16 @@ async function getRuntimeUpgradeByProposalHash(network: string) {
     const decodedExtr = api.createType("Call", encodedCall).toHuman()
     
     console.log("Decoded Extrinsic:", formatCall(decodedExtr))
-    // display involved parachains
+    // display involved parachainID's
     console.log("ParachainIDs:", parachainValues.toString())
+    // get their names
+    getParachainNames();
 
     startChopsticks(encodedCall)
   } catch (error) {
     throw new Error(`Error fetching data for proposal hash ${proposalHash}: ${String(error)}`)
   } finally {
-    await api.disconnect()
+    api.disconnect();
   }
 }
 
@@ -89,13 +91,12 @@ async function getRuntimeUpgradeByProposalHash(network: string) {
 function getParachainNames() {
   // Example usage
   const filePath = 'parachains.json';
-  const myJSON = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-
-  const chainData = myJSON.relaychain[relaychain];
+  const chainData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
   parachainValues.forEach((id) => {
-  if (chainData && chainData[id]) {
-    parachainNames.push(chainData[id]);
-  }
+    console.log("getting parachain names for :", id);
+    console.log("getting parachain names from :", chainData.relaychain[relaychain][id]);
+    parachainNames.push(chainData.relaychain[relaychain][id]);
+  
 });
 
   return
@@ -138,28 +139,13 @@ main()
 // no idea how to properly restrict the type :/
 function startChopsticks(preimage: any) {
   // Construct the chopsticks command to dry run
-    const chopsticksCommand = `npx @acala-network/chopsticks@latest dry-run --endpoint= ${networkWsUrls[relaychain]} --preimage= ${preimage} --open`;
-    
-    // Start chopsticks using child_process
-    const child = exec(chopsticksCommand);
+    const chopsticksCommand = `npx @acala-network/chopsticks@latest --relaychain=${relaychain} --parachain=${parachainNames[0]}`;
+    console.log('starting chopsticks with command:', chopsticksCommand)
 
-    // Handle child process events as needed
-    child.on('exit', (code, signal) => {
-      console.log(`chopsticks exited with code ${code} and signal ${signal}`);
-    });
-
-    
-    // Check if stdout exists before using it
-    if (child.stdout) {
-      child.stdout.on('data', (data) => {
-        console.log(`chopsticks stdout: ${data}`);
-      });
-    }
-
-    // Check if stderr exists before using it
-    if (child.stderr) {
-      child.stderr.on('data', (data) => {
-        console.error(`chopsticks stderr: ${data}`);
-      });
-    }
+      // Start chopsticks using execSync with shell option
+  try {
+    const result = execSync(chopsticksCommand, { stdio: 'inherit', shell: "true" });
+  } catch (error) {
+    console.error('Error executing chopsticks:', error);
   }
+}
