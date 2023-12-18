@@ -5,6 +5,8 @@ import * as readlineSync from "readline-sync"
 import * as fs from 'fs';
 import * as path from 'path';
 import { parachains } from "@polkadot/types/interfaces/definitions";
+import { spawn } from 'child_process';
+
 
 // this order determines the value for `relaychain` so handle with care.
 const networkWsUrls: Record<string, string | undefined> = {
@@ -78,7 +80,12 @@ async function getRuntimeUpgradeByProposalHash(network: string) {
     // get their names
     getParachainNames();
 
-    startChopsticks(encodedCall)
+    // Wait for the child process to complete
+  try {
+    await startChopsticks(encodedCall);
+  } catch (error) {
+    console.error(error);
+  }
   } catch (error) {
     throw new Error(`Error fetching data for proposal hash ${proposalHash}: ${String(error)}`)
   } finally {
@@ -137,15 +144,31 @@ main()
 
 // Modify startChopsticks to accept parachainNames as an argument
 // no idea how to properly restrict the type :/
-function startChopsticks(preimage: any) {
+function startChopsticks(preimage: any): Promise<void> {
+  return new Promise((resolve, reject) => {
   // Construct the chopsticks command to dry run
-    const chopsticksCommand = `npx @acala-network/chopsticks@latest --relaychain=${relaychain} --parachain=${parachainNames[0]}`;
-    console.log('starting chopsticks with command:', chopsticksCommand)
+    const chopsticksCommand = `npx @acala-network/chopsticks@latest xcm --relaychain=${relaychain} --parachain=${parachainNames[0]}`;
+  
 
-      // Start chopsticks using execSync with shell option
-  try {
-    const result = execSync(chopsticksCommand, { stdio: 'inherit', shell: "true" });
-  } catch (error) {
-    console.error('Error executing chopsticks:', error);
-  }
+  
+    console.log('starting chopsticks with command:', chopsticksCommand)
+    
+    const child = spawn(chopsticksCommand, {
+      stdio: 'inherit', 
+      shell: true
+    });
+
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`Child process exited with code ${code}`));
+      }
+    });
+
+    child.on('error', (error) => {
+      reject(error);
+    });
+  });
+    
 }
