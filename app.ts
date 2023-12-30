@@ -4,7 +4,7 @@ import { execSync} from 'child_process';
 import * as readlineSync from "readline-sync"
 import * as fs from 'fs';
 import * as path from 'path';
-import { parachains } from "@polkadot/types/interfaces/definitions";
+import { parachains, system } from "@polkadot/types/interfaces/definitions";
 import { spawn } from 'child_process';
 
 
@@ -17,8 +17,14 @@ const networkWsUrls: Record<string, string | undefined> = {
 // Declare parachainValues at the top-level scope
 const parachainValues: any[] = [];
 
+// Declare parachainValues at the top-level scope
+const parachainCalls: any[] = [];
+
 // final parachain values that are passed on to chopsticks cli
 const parachainNames: any[] = [];
+
+// the call fed to the relaychain
+var encodedCall: any = [];
 
 // save relay chain decision
 var relaychain: string = "polkadot";
@@ -59,7 +65,7 @@ async function getRuntimeUpgradeByProposalHash(network: string) {
 
   try {
     const preimage = await api.query.preimage.preimageFor([proposalHash, proposalLen])
-    const encodedCall = preimage.toHuman()
+    encodedCall = preimage.toHuman()
 
     // Check for null fetch
     if (encodedCall == null) {
@@ -80,16 +86,22 @@ async function getRuntimeUpgradeByProposalHash(network: string) {
     // get their names
     getParachainNames();
 
-    // Wait for the child process to complete
-  try {
-    await startChopsticks(encodedCall);
-  } catch (error) {
-    console.error(error);
-  }
   } catch (error) {
     throw new Error(`Error fetching data for proposal hash ${proposalHash}: ${String(error)}`)
+  }
+  let chopChild;
+  try {
+    chopChild =  await startChopsticks();
+    // at this point the process is launched. Time to feed it the call.
+    await chopsticksHandler(chopChild, encodedCall);
+  
+  } catch (error) {
+    throw new Error(`Error dry running proposal hash ${proposalHash}: ${String(error)}`)
   } finally {
     api.disconnect();
+    if (chopChild) {
+      chopChild.kill();
+    }
   }
 }
 
@@ -100,12 +112,9 @@ function getParachainNames() {
   const filePath = 'parachains.json';
   const chainData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
   parachainValues.forEach((id) => {
-    console.log("getting parachain names for :", id);
-    console.log("getting parachain names from :", chainData.relaychain[relaychain][id]);
+    console.log("id", id, "was resolved to name :", chainData.relaychain[relaychain][id]);
     parachainNames.push(chainData.relaychain[relaychain][id]);
-  
-});
-
+  });
   return
 }
 
@@ -114,9 +123,17 @@ function formatCall(call: Record<string, AnyJson> | AnyJson | null, depth = 0): 
 
   return Object.entries(call)
     .map(([key, value]) => {
+      // This assumes that each mention of parachain and a following call is coupled.
       // track all parachainIDs
       if (key === "Parachain") {
         parachainValues.push(value);
+      }
+
+      // track all enocded calls towards a parachain
+      // atm not used.
+      if (key === "encoded") {
+        parachainCalls.push(value);
+        console.log('detected encoded call:', value, "for parachain:", parachainValues[parachainValues.length - 1])
       }
 
       // Handle arrays (e.g., nested calls)
@@ -142,33 +159,68 @@ main()
     process.exit(1)
   })
 
+
+async function chopsticksHandler(childProcess: ChildProcess, encodedCall): Promise<void> {
+  // Sleep for a few seconds to allow the child process to initialize
+  await new Promise(resolve => setTimeout(resolve, 40000)); // Sleep to wait for network setup.
+  // create the api of the local relay chain
+  const localAPI = await ApiPromise.create({ provider: new WsProvider('ws://127.0.0.1:8001') });
+
+  // feed the encoded call
+  const number = (await localAPI.rpc.chain.getHeader()).number.toNumber()
+  console.log("trying to feed call", encodedCall);
+  await localAPI.rpc('dev_setStorage', {
+  scheduler: {
+    agenda: [
+      [
+        [number + 1], [
+          {
+            call: {
+               Inline: encodedCall
+             },
+            origin: {
+              system: 'Root'
+            }
+          }
+        ]
+      ]
+    ]
+  }
+})
+  await localAPI.rpc('dev_newBlock');
+}
+
+
 // Modify startChopsticks to accept parachainNames as an argument
 // no idea how to properly restrict the type :/
-function startChopsticks(preimage: any): Promise<void> {
+async function startChopsticks(): Promise<ChildProcess> {
   return new Promise((resolve, reject) => {
-  // Construct the chopsticks command to dry run
-    const chopsticksCommand = `npx @acala-network/chopsticks@latest xcm --relaychain=${relaychain} --parachain=${parachainNames[0]}`;
-  
+    // Construct the command and its arguments
+    const command = 'npx';
 
-  
-    console.log('starting chopsticks with command:', chopsticksCommand)
+    // TODO: create parachain arguments for each entry in parachainNames
+    const chopsticksArgs = [`@acala-network/chopsticks@latest`, `xcm`, `--relaychain=${relaychain}`, `--parachain=${parachainNames[0]}`];
     
-    const child = spawn(chopsticksCommand, {
+    console.log('Starting chopsticks with command:', `${command} ${chopsticksArgs.join(' ')}`);
+
+    // Spawn the child process
+    const child = spawn(command, chopsticksArgs, {
       stdio: 'inherit', 
-      shell: true
+      shell: true,
+      detached: false
     });
 
-    child.on('close', (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`Child process exited with code ${code}`));
-      }
-    });
-
+    // Attach an error listener
     child.on('error', (error) => {
       reject(error);
     });
+
+    child.on('exit', (code, signal) => {
+      console.log(`Child process exited with code ${code} and signal ${signal}`);
+      // Additional logic after child process exit can be placed here
+    });
+
+    // Resolve with the child process
+    resolve(child);
   });
-    
 }
