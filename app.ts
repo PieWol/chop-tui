@@ -24,7 +24,7 @@ const parachainCalls: any[] = [];
 const parachainNames: any[] = [];
 
 // the call fed to the relaychain
-var encodedCall: any = [];
+var preimage: any = [];
 
 // save relay chain decision
 var relaychain: string = "polkadot";
@@ -65,7 +65,7 @@ async function getRuntimeUpgradeByProposalHash(network: string) {
 
   try {
     const preimage = await api.query.preimage.preimageFor([proposalHash, proposalLen])
-    encodedCall = preimage.toHuman()
+    const encodedCall = preimage.toHuman()
 
     // Check for null fetch
     if (encodedCall == null) {
@@ -93,7 +93,7 @@ async function getRuntimeUpgradeByProposalHash(network: string) {
   try {
     chopChild =  await startChopsticks();
     // at this point the process is launched. Time to feed it the call.
-    await chopsticksHandler(chopChild, encodedCall);
+    await chopsticksHandler(chopChild, preimage);
   
   } catch (error) {
     throw new Error(`Error dry running proposal hash ${proposalHash}: ${String(error)}`)
@@ -160,7 +160,7 @@ main()
   })
 
 
-async function chopsticksHandler(childProcess: ChildProcess, encodedCall): Promise<void> {
+async function chopsticksHandler(childProcess: ChildProcess, preimage): Promise<void> {
   // Sleep for a few seconds to allow the child process to initialize
   await new Promise(resolve => setTimeout(resolve, 40000)); // Sleep to wait for network setup.
   // create the api of the local relay chain
@@ -168,7 +168,7 @@ async function chopsticksHandler(childProcess: ChildProcess, encodedCall): Promi
 
   // feed the encoded call
   const number = (await localAPI.rpc.chain.getHeader()).number.toNumber()
-  console.log("trying to feed call", encodedCall);
+  console.log("trying to feed the preimage");
   await localAPI.rpc('dev_setStorage', {
   scheduler: {
     agenda: [
@@ -176,7 +176,7 @@ async function chopsticksHandler(childProcess: ChildProcess, encodedCall): Promi
         [number + 1], [
           {
             call: {
-               Inline: encodedCall
+               Inline: preimage
              },
             origin: {
               system: 'Root'
