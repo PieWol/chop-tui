@@ -24,7 +24,8 @@ const parachainCalls: any[] = [];
 const parachainNames: any[] = [];
 
 // the call fed to the relaychain
-var preimage: any = [];
+let preimage: any = [];
+let chopChild: ChildProcess;
 
 // save relay chain decision
 var relaychain: string = "polkadot";
@@ -64,11 +65,13 @@ async function getRuntimeUpgradeByProposalHash(network: string) {
   const api = await ApiPromise.create({ provider: new WsProvider(wsUrl) })
 
   try {
-    const preimage = await api.query.preimage.preimageFor([proposalHash, proposalLen])
-    const encodedCall = preimage.toHuman()
+    preimage = await (await api.query.preimage.preimageFor([proposalHash, proposalLen])).toHuman();
+    
+    console.log("fetched preimage: ", preimage);
+  
 
     // Check for null fetch
-    if (encodedCall == null) {
+    if (preimage == null) {
         console.log('Could not fetch preimage. Data has been cleared or inputs were wrong.')
         return
       }
@@ -78,7 +81,7 @@ async function getRuntimeUpgradeByProposalHash(network: string) {
     console.log("Metadata Version:", metadata.version.toString())
 
     // Decode the extrinsic using the extrinsic type
-    const decodedExtr = api.createType("Call", encodedCall).toHuman()
+    const decodedExtr = api.createType("Call", preimage).toHuman()
     
     console.log("Decoded Extrinsic:", formatCall(decodedExtr))
     // display involved parachainID's
@@ -153,7 +156,11 @@ function formatCall(call: Record<string, AnyJson> | AnyJson | null, depth = 0): 
 }
 
 main()
-  .then(() => process.exit(0))
+  .then(() => {if (chopChild) {
+    chopChild.kill()
+  };
+  process.exit(0)
+})
   .catch((error) => {
     console.error(error)
     process.exit(1)
@@ -168,7 +175,8 @@ async function chopsticksHandler(childProcess: ChildProcess, preimage): Promise<
 
   // feed the encoded call
   const number = (await localAPI.rpc.chain.getHeader()).number.toNumber()
-  console.log("trying to feed the preimage");
+  console.log("trying to feed the preimage", preimage);
+  console.log("chain height is ", number);
   await localAPI.rpc('dev_setStorage', {
   scheduler: {
     agenda: [
@@ -187,7 +195,10 @@ async function chopsticksHandler(childProcess: ChildProcess, preimage): Promise<
     ]
   }
 })
+
+
   await localAPI.rpc('dev_newBlock');
+  return Promise.resolve();
 }
 
 
